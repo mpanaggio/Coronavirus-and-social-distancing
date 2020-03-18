@@ -87,22 +87,33 @@ def simulate_intervention(init_state,params,seed=1):
     params_after_intervention=params.copy()
     params['p_q']=0
     params['u']=0
-    state=simulate_epidemic(init_state,params['intervention time'],params)
+    state=simulate_epidemic(init_state,params['adoption time'],params)
     params_after_intervention['intial state']=state[:,-1]
     params_after_intervention['c']=(1-params['contact reduction factor'])*params['c']
     params_after_intervention['r']=params['r']*(1+params['recovery increase factor'])
     np.random.seed(int(seed))
-    
+    # after adoption before abandonment
     state_wo=np.concatenate([state.copy(),
                              simulate_epidemic(state[:,-1],
-                                               params['t_max'],
+                                               params['abandonment time'],
                                                params)],
                             axis=1)
     np.random.seed(int(seed))
     state_w=np.concatenate([state.copy(),
                             simulate_epidemic(state[:,-1],
-                                              params['t_max'],
+                                              params['abandonment time'],
                                               params_after_intervention)],
+                           axis=1)
+    # after abandonment
+    state_wo=np.concatenate([state_wo.copy(),
+                             simulate_epidemic(state_wo[:,-1],
+                                               params['t_max'],
+                                               params)],
+                            axis=1)
+    state_w=np.concatenate([state_w.copy(),
+                            simulate_epidemic(state_w[:,-1],
+                                              params['t_max'],
+                                              params)],
                            axis=1)
     return state_wo,state_w
 
@@ -112,7 +123,8 @@ def make_interactive_plot(N0=300e6,
                   transmission_probability=0.01,
                   mortality_rate=0.03,
                   infection_duration=10,
-                  intervention_time=100,
+                  adoption_time=50,
+                  abandonment_time=200,
                   contact_rate_reduction_factor=0.4,
                   recovery_rate_increase_factor=0.5,
                   detection_probability=0.5,
@@ -133,14 +145,16 @@ def make_interactive_plot(N0=300e6,
     params['p_q']=detection_probability
     params['c_q']=max_quarantine
     params['u']=vaccination_rate
-    params['intervention time']=intervention_time
+    params['adoption time']=adoption_time
+    params['abandonment time']=abandonment_time
     params['contact reduction factor']=contact_rate_reduction_factor
     params['recovery increase factor']=contact_rate_reduction_factor
     params['t_max']=t_max
     state_wo,state_w=simulate_intervention(init_state,params,seed=1)
     l1,l2,l3,l4,l5,l6,l7=plot_state(state_wo,N0,normalized=normalized,ls='',lb2=' without SD')
     l8,l9,l10,l11,l12,l13,l14=plot_state(state_w,N0,normalized=normalized,ls='--',lb2=' with SD')
-    l15=plt.axvline(params['intervention time'],c='gray')
+    l15=plt.axvline(params['adoption time'],c='gray')
+    l16=plt.axvline(params['abandonment time'],c='gray')
     style = {'description_width': 'initial'}
     xlim=FloatSlider(description='t range', step=0.1, min=0,max=t_max,value=t_max,style=style)
     ylim=FloatSlider(description='y range', step=0.1, min=0,max=N0,value=N0,style=style)
@@ -153,7 +167,8 @@ def make_interactive_plot(N0=300e6,
     max_quarantine=FloatSlider(description='max quarantine', step=1, min=0,max=100, value=max_quarantine,style=style)
     vaccination_rate=FloatSlider(description='vaccination rate', step=1, min=0,max=t_max, value=vaccination_rate,style=style)
 #     intervention_time=FloatSlider(description='t', step=0.1, min=0,max=500, value=intervention_time)
-    intervention_time=FloatText(value=intervention_time, description='intervention time',style=style,layout=Layout(width='50%', height='30px'))
+    adoption_time=FloatText(value=adoption_time, description='adoption time',style=style,layout=Layout(width='50%', height='30px'))
+    abandonment_time=FloatText(value=abandonment_time, description='abandonment time',style=style,layout=Layout(width='70%', height='30px'))
     contact_rate_reduction_factor=FloatSlider(description='contact reduction', step=0.001, min=0,max=1, value=contact_rate_reduction_factor,style=style)
     recovery_rate_increase_factor=FloatSlider(description='recovery increase', step=0.001, min=0,max=1, value=recovery_rate_increase_factor,style=style)
     boxS = Checkbox(False, description='Show S?')
@@ -168,7 +183,7 @@ def make_interactive_plot(N0=300e6,
                       seed,
                       contact_rate,transmission_probability,
                       infection_duration,mortality_rate,
-                      intervention_time,
+                      adoption_time,abandonment_time,
                       detection_probability,max_quarantine,
                       vaccination_rate,
                       contact_rate_reduction_factor,recovery_rate_increase_factor,
@@ -192,7 +207,8 @@ def make_interactive_plot(N0=300e6,
                detection_probability=detection_probability,
                max_quarantine=max_quarantine,
                vaccination_rate=vaccination_rate,
-               intervention_time=intervention_time,
+               adoption_time=adoption_time,
+               abandonment_time=abandonment_time,
                contact_rate_reduction_factor=contact_rate_reduction_factor,
                recovery_rate_increase_factor=recovery_rate_increase_factor,
                boxS = boxS,
@@ -212,7 +228,8 @@ def make_interactive_plot(N0=300e6,
         params['p_q']=detection_probability
         params['c_q']=max_quarantine
         params['u']=vaccination_rate
-        params['intervention time']=intervention_time
+        params['adoption time']=adoption_time
+        params['abandonment time']=abandonment_time
         params['contact reduction factor']=contact_rate_reduction_factor
         params['recovery increase factor']=recovery_rate_increase_factor
         state_wo,state_w=simulate_intervention(init_state,params,seed=seed)
@@ -249,7 +266,8 @@ def make_interactive_plot(N0=300e6,
         l13.set_ydata(state_w[6,:]/fac)
         l14.set_xdata(state_w[0,:])
         l14.set_ydata(state_w[7,:]/fac)
-        l15.set_xdata(params['intervention time'])
+        l15.set_xdata(params['adoption time'])
+        l16.set_xdata(params['abandonment time'])
         
         if boxS:
             l1.set_visible(True)
@@ -306,9 +324,12 @@ def make_interactive_plot(N0=300e6,
         print_state_w=state_w[1:,i]
         labels=['S','I','R','D','Q','V','cumulative I']
         for k in range(len(labels)):
-            print('{} (with intervention): {} {} (without intervention): {}'.format(labels[k],str(print_state_wo[k][0]).ljust(10),labels[k],str(print_state_w[k][0]).ljust(10)))
+            print('{} (with measures): {} {} (without measures): {}'.format(labels[k],str(print_state_wo[k][0]).ljust(10),labels[k],str(print_state_w[k][0]).ljust(10)))
         print("")
-        print("R0: {:.3f}".format(params['c']*params['p_t']/(params['r']+params['delta']), "(values greater than 1 lead to an outbreak)"))
+        print("R0 (with measures):  {:.3f}     R0 (without measures): {:.3f}".format(params['c']*params['p_t']/(params['r']+params['delta']),
+              params['c']*(1-contact_rate_reduction_factor)*params['p_t']/(params['r']*(1+recovery_rate_increase_factor)+params['delta'])))
+             
+        print("(values greater than 1 lead to an outbreak)")
         print("")
         print("Final Epidemic results:")
         print("Without social distancing:")
@@ -328,7 +349,8 @@ def make_interactive_plot(N0=300e6,
                                         'detection_probability':detection_probability,
                                         'max_quarantine':max_quarantine,
                                         'vaccination_rate':vaccination_rate,
-                                        'intervention_time':intervention_time,
+                                        'adoption_time':adoption_time,
+                                        'abandonment_time':abandonment_time,
                                         'contact_rate_reduction_factor':contact_rate_reduction_factor,
                                         'recovery_rate_increase_factor':recovery_rate_increase_factor,
                                         'boxS': boxS,
@@ -339,4 +361,4 @@ def make_interactive_plot(N0=300e6,
                                         'boxV': boxV,
                                         'boxcI': boxcI,'print_time':print_time}
                                  )  
-    return (l1,l2,l3,l4,l5,l6,l7,l8,l9,l10,l11,l12,l13,l14,l15),params,output,ui
+    return (l1,l2,l3,l4,l5,l6,l7,l8,l9,l10,l11,l12,l13,l14,l15,l16),params,output,ui
